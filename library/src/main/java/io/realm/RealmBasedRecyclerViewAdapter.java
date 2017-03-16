@@ -18,6 +18,8 @@
 package io.realm;
 
 import android.content.Context;
+import android.os.Handler;
+import android.support.annotation.LayoutRes;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -77,6 +79,20 @@ public abstract class RealmBasedRecyclerViewAdapter
 
     private Object loadMoreItem;
     private Object footerItem;
+    private boolean needToRemoveLoadMore;
+    private boolean needToAddLoadMore;
+    private Runnable addLoadMoreRunnable = new Runnable() {
+        @Override
+        public void run() {
+            addLoadMore();
+        }
+    };
+    private Runnable removeLoadMoreRunnable = new Runnable() {
+        @Override
+        public void run() {
+            removeLoadMoreAnimated();
+        }
+    };
 
     protected final int HEADER_VIEW_TYPE = 100;
     private final int LOAD_MORE_VIEW_TYPE = 101;
@@ -98,6 +114,7 @@ public abstract class RealmBasedRecyclerViewAdapter
     private RealmFieldType animatePrimaryIdType;
     private long animateExtraColumnIndex;
     private RealmFieldType animateExtraIdType;
+    private int loadMoreLayoutId = -1;
 
     public RealmBasedRecyclerViewAdapter(
             Context context,
@@ -245,7 +262,7 @@ public abstract class RealmBasedRecyclerViewAdapter
         if (viewType == HEADER_VIEW_TYPE) {
             return onCreateHeaderViewHolder(viewGroup);
         } else if (viewType == LOAD_MORE_VIEW_TYPE) {
-            return new RealmViewHolder(new LoadMoreListItemView(viewGroup.getContext()));
+            return new RealmViewHolder(new LoadMoreListItemView(viewGroup.getContext(), loadMoreLayoutId));
         } else if (viewType == FOOTER_VIEW_TYPE) {
             return onCreateFooterViewHolder(viewGroup);
         }
@@ -573,8 +590,13 @@ public abstract class RealmBasedRecyclerViewAdapter
                     notifyDataSetChanged();
                     ids = getIdsOfRealmResults();
                 }
+                //removeOrAddLoadMoreHandle();
             }
         };
+    }
+
+    public void setLoadMoreLayoutId(@LayoutRes int layoutId) {
+        loadMoreLayoutId = layoutId;
     }
 
     /**
@@ -585,7 +607,12 @@ public abstract class RealmBasedRecyclerViewAdapter
             return;
         }
         loadMoreItem = new Object();
-        notifyDataSetChanged();
+        new Handler().postAtTime(new Runnable() {
+            @Override
+            public void run() {
+                notifyDataSetChanged();
+            }
+        }, 100);
     }
 
     /**
@@ -596,7 +623,36 @@ public abstract class RealmBasedRecyclerViewAdapter
             return;
         }
         loadMoreItem = null;
-        notifyDataSetChanged();
+        new Handler().postAtTime(new Runnable() {
+            @Override
+            public void run() {
+                notifyDataSetChanged();
+            }
+        }, 100);
+        //notifyDataSetChanged();
+    }
+
+    public void removeLoadMoreAnimated() {
+        if (loadMoreItem == null) {
+            return;
+        }
+        loadMoreItem = null;
+        //Small delay to prevent Inconsistency error
+        new Handler().postAtTime(new Runnable() {
+            @Override
+            public void run() {
+                notifyItemRemoved(getItemCount());
+            }
+        }, 100);
+    }
+
+    public void removeOrAddLoadMoreHandle() {
+        if (needToAddLoadMore)
+            new Handler().post(addLoadMoreRunnable);
+        else if(needToRemoveLoadMore)
+            new Handler().post(removeLoadMoreRunnable);
+        needToRemoveLoadMore = false;
+        needToAddLoadMore = false;
     }
 
     /**

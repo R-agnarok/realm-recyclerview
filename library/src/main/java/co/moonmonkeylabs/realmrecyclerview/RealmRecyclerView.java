@@ -2,6 +2,7 @@ package co.moonmonkeylabs.realmrecyclerview;
 
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.support.annotation.ColorInt;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
@@ -14,6 +15,8 @@ import android.view.ViewStub;
 import android.widget.FrameLayout;
 import com.tonicartos.superslim.LayoutManager;
 
+import co.moonmonkeylabs.realmrecyclerview.SwipyToRefresh.SwipyRefreshLayout;
+import co.moonmonkeylabs.realmrecyclerview.SwipyToRefresh.SwipyRefreshLayoutDirection;
 import io.realm.RealmBasedRecyclerViewAdapter;
 
 /**
@@ -26,6 +29,7 @@ public class RealmRecyclerView extends FrameLayout {
 
     public interface OnRefreshListener {
         void onRefresh();
+        void onBottomRefresh();
     }
 
     public interface OnLoadMoreListener {
@@ -35,17 +39,17 @@ public class RealmRecyclerView extends FrameLayout {
     private enum Type {
         LinearLayout,
         Grid,
-        LinearLayoutWithHeaders,
         StaggeredGridLayout
+        LinearLayoutWithHeaders
     }
 
-    private SwipeRefreshLayout swipeRefreshLayout;
+    private SwipyRefreshLayout swipeRefreshLayout;
     private RecyclerView recyclerView;
     private ViewStub emptyContentContainer;
     private RealmBasedRecyclerViewAdapter adapter;
     private RealmSimpleItemTouchHelperCallback realmSimpleItemTouchHelperCallback;
     private boolean hasLoadMoreFired;
-    private boolean showShowLoadMore;
+    private boolean showShowLoadMore = true;
 
     // Attributes
     private boolean isRefreshable;
@@ -55,6 +59,7 @@ public class RealmRecyclerView extends FrameLayout {
     private int gridWidthPx;
     private boolean swipeToDelete;
     private int bufferItems = 3;
+    private SwipyRefreshLayoutDirection swipeDirection;
 
     private StaggeredGridLayoutManager staggeredGridManager;
     private GridLayoutManager gridManager;
@@ -81,7 +86,7 @@ public class RealmRecyclerView extends FrameLayout {
         super(context, attrs, defStyleAttr);
         init(context, attrs);
     }
-
+    
     public RealmRecyclerView(Context context, AttributeSet attrs, int defStyleAttr, int bufferItems) {
         super(context, attrs, defStyleAttr);
         if (bufferItems <= 0) bufferItems = 0;
@@ -103,7 +108,8 @@ public class RealmRecyclerView extends FrameLayout {
         inflate(context, R.layout.realm_recycler_view, this);
         initAttrs(context, attrs);
 
-        swipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.rrv_swipe_refresh_layout);
+        swipeRefreshLayout = (SwipyRefreshLayout) findViewById(R.id.rrv_swipe_refresh_layout);
+        swipeRefreshLayout.setDirection(swipeDirection);
         recyclerView = (RecyclerView) findViewById(R.id.rrv_recycler_view);
         emptyContentContainer = (ViewStub) findViewById(R.id.rrv_empty_content_container);
 
@@ -176,7 +182,8 @@ public class RealmRecyclerView extends FrameLayout {
 
                     @Override
                     public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                        maybeFireLoadMore();
+                        if (dy > 0)
+                            maybeFireLoadMore();
                     }
                 }
         );
@@ -212,24 +219,39 @@ public class RealmRecyclerView extends FrameLayout {
                 "SwipeToDelete not supported with this layout type: " + type.name());
     }
 
+    public void setSwipeRefreshLayoutColors(@ColorInt int... colors) {
+        swipeRefreshLayout.setColorSchemeColors(colors);
+    }
+
     public void setOnLoadMoreListener(OnLoadMoreListener onLoadMoreListener) {
         this.onLoadMoreListener = onLoadMoreListener;
     }
 
     public void enableShowLoadMore() {
         showShowLoadMore = true;
-        ((RealmBasedRecyclerViewAdapter) recyclerView.getAdapter()).addLoadMore();
+        addLoadMore();
     }
 
     public void disableShowLoadMore() {
         showShowLoadMore = false;
+    }
+
+    public void removeLoadMoreAnimated() {
+        swipeRefreshLayout.setCanSwipeBottom(true);
+        ((RealmBasedRecyclerViewAdapter) recyclerView.getAdapter()).removeLoadMoreAnimated();
+        disableShowLoadMore();
+    }
+
+    public void removeLoadMore() {
         ((RealmBasedRecyclerViewAdapter) recyclerView.getAdapter()).removeLoadMore();
     }
 
+    public void addLoadMore() {
+        swipeRefreshLayout.setCanSwipeBottom(false);
+        ((RealmBasedRecyclerViewAdapter) recyclerView.getAdapter()).addLoadMore();
+    }
+
     private void maybeFireLoadMore() {
-        if (hasLoadMoreFired) {
-            return;
-        }
         if (!showShowLoadMore) {
             return;
         }
@@ -245,7 +267,7 @@ public class RealmRecyclerView extends FrameLayout {
 
         if (firstVisibleItemPosition + visibleItemCount + bufferItems > totalItemCount) {
             if (onLoadMoreListener != null) {
-                hasLoadMoreFired = true;
+                showShowLoadMore = false;
                 onLoadMoreListener.onLoadMore(adapter.getLastItem());
             }
         }
@@ -277,6 +299,10 @@ public class RealmRecyclerView extends FrameLayout {
 
         isRefreshable =
                 typedArray.getBoolean(R.styleable.RealmRecyclerView_rrvIsRefreshable, false);
+
+        swipeDirection = SwipyRefreshLayoutDirection.getFromInt(typedArray
+                .getInt(R.styleable.RealmRecyclerView_srl_direction, 0));
+
         emptyViewId =
                 typedArray.getResourceId(R.styleable.RealmRecyclerView_rrvEmptyLayoutId, 0);
         int typeValue = typedArray.getInt(R.styleable.RealmRecyclerView_rrvLayoutType, -1);
@@ -366,6 +392,8 @@ public class RealmRecyclerView extends FrameLayout {
     //
     // Expose public RecyclerView methods to the RealmRecyclerView
     //
+    
+    
     public void setItemViewCacheSize(int size) {
         recyclerView.setItemViewCacheSize(size);
     }
@@ -377,10 +405,10 @@ public class RealmRecyclerView extends FrameLayout {
     public void scrollToPosition(int position) {
         recyclerView.scrollToPosition(position);
     }
-
+    
     //
     // Expose public RecycleView
-    //
+    
     public RecyclerView getRecycleView(){
         return recyclerView;
     }
@@ -388,6 +416,7 @@ public class RealmRecyclerView extends FrameLayout {
     //
     // Pull-to-refresh
     //
+
     public void setOnRefreshListener(OnRefreshListener onRefreshListener) {
         this.onRefreshListener = onRefreshListener;
     }
@@ -399,27 +428,30 @@ public class RealmRecyclerView extends FrameLayout {
         isRefreshing = refreshing;
         swipeRefreshLayout.setRefreshing(refreshing);
     }
-
+    
     public void resetHasLoadMoreFired() {
         hasLoadMoreFired = false;
     }
 
-    //
     // Expose method to change the preloaded items
-    //
     public void setBufferItems(int bufferItems){
         if (bufferItems <= 0) bufferItems = 0;
         this.bufferItems = bufferItems;
     }
 
-    private SwipeRefreshLayout.OnRefreshListener recyclerViewRefreshListener =
-            new SwipeRefreshLayout.OnRefreshListener() {
+    private SwipyRefreshLayout.OnRefreshListener recyclerViewRefreshListener =
+            new SwipyRefreshLayout.OnRefreshListener() {
                 @Override
-                public void onRefresh() {
-                    if (!isRefreshing && onRefreshListener != null) {
-                        onRefreshListener.onRefresh();
+                public void onRefresh(SwipyRefreshLayoutDirection direction) {
+                    if (direction == SwipyRefreshLayoutDirection.TOP) {
+                        if (!isRefreshing && onRefreshListener != null) {
+                            onRefreshListener.onRefresh();
+                        }
+                        isRefreshing = true;
+                    } else {
+                        if (onRefreshListener != null && !showShowLoadMore)
+                            onRefreshListener.onBottomRefresh();
                     }
-                    isRefreshing = true;
                 }
             };
 }

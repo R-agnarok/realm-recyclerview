@@ -4,7 +4,13 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <android.support.v4.widget.SwipeRefreshLayout
+    <ViewStub
+        android:id="@+id/rrv_empty_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"/>
+
+    <co.moonmonkeylabs.realmrecyclerview.SwipyToRefresh.SwipyRefreshLayout
         android:id="@+id/rrv_swipe_refresh_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -14,11 +20,5 @@
             android:scrollbars="vertical"
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
-    </android.support.v4.widget.SwipeRefreshLayout>
-
-    <ViewStub
-        android:id="@+id/rrv_empty_content_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone"/>
+    </co.moonmonkeylabs.realmrecyclerview.SwipyToRefresh.SwipyRefreshLayout>
 </FrameLayout>
