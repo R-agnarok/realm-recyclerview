@@ -39,7 +39,7 @@ public class RealmRecyclerView extends FrameLayout {
     private enum Type {
         LinearLayout,
         Grid,
-        StaggeredGridLayout
+        StaggeredGridLayout,
         LinearLayoutWithHeaders
     }
 
